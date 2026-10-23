@@ -60,6 +60,33 @@ schedule:
 #     校验返回数据中的链接是否为 HTTPS 且域名匹配，不匹配时丢弃该平台数据并记录警告
 #     可有效防范链接劫持或数据篡改
 #     只要 api_url 不是你自己部署的实例，都推荐配置 expected_domain
+#
+# ── 选源依据（共 22 个源，分三块）─────────────────────────────
+#   A 技术向 8 个：aihot / juejin / v2ex-share / github-trending-today /
+#                   hackernews / solidot / ithome / sspai
+#        - 优先级 1（Java/后端/架构）靠 juejin / v2ex-share 撑起
+#        - 优先级 2（AI 大模型行业）靠 aihot
+#        - 优先级 3（开发者工具与开源）靠 github-trending-today / solidot / hackernews
+#   B 大众热榜 3 个：zhihu / weibo / toutiao，用于捕捉 AI 行业突发大事件
+#   C 有趣 + 政策 11 个：coolapk / bilibili / douban / steam / hupu / chongbuluo /
+#                        producthunt / nowcoder / freebuf / thepaper / ifeng
+#
+# 11 个有趣源的选择过程（2026-10-23 实测，勿凭感觉改动）：
+#   - vtuber 内容全部放弃：RSSHub 公共实例测了 24 个全部不可用（403/503/超时），
+#     B站热搜 30 条里 vtuber 出现 0 次，B站虚拟区 API 需 wbi 签名（HTTP 412）。
+#   - 政策类只留 gov.cn（走 RSS）+ 中新网财经（走 RSS），热榜侧只留
+#     thepaper / ifeng 两个，避免时政淹没技术内容。
+#   - 曾验通但未采用：zaobao（实际 host 为 zaochenbao.com，属第三方镜像站，
+#     30 条但来源可疑）、sputniknewscn（俄卫星社中文，20 条，立场源不纳入）。
+#   - 所有 22 个源均通过 https + expected_domain 逐条校验，且连续 3 次抓取条数稳定。
+#
+# expected_domain 校验规则（trendradar/crawler/fetcher.py:69-84）：
+#   返回条目里 url 与 mobileUrl 必须是 https，且
+#   hostname == expected_domain 或 hostname.endswith("." + expected_domain)
+#   不匹配会丢弃整批数据并告警。下面每个域名均经实测核对。
+#
+# 注意：id 必须用 newsnow 的真实 id。v2ex 是 redirect 别名（指向 v2ex-share），
+#       直接写 v2ex 会多一次跳转，故此处直接用 v2ex-share。
 # ===============================================================
 platforms:
   enabled: true                         # 是否启用热榜平台抓取（true=启用, false=关闭）
@@ -113,6 +140,59 @@ platforms:
       name: "今日头条"
       expected_domain: "toutiao.com"
 
+    # ── 有趣：数码折腾 / 游戏番剧 / 求职（2026-10-23 实测）────
+    # 选源依据见 frequency_words.txt 的「数码与折腾」「游戏与番剧」
+    # 「求职与职场」三组；下面每个源连续 3 次抓取均稳定（条数不变）
+
+    - id: "coolapk"                     # 酷安，数码圈真话密度最高，刷机/翻车/真香全在这
+      name: "酷安"
+      expected_domain: "coolapk.com"    # 实际 host 为 www.coolapk.com
+
+    - id: "bilibili"                    # B站热搜，20-30 条社会+赛事热点，偶有 UP 主趣闻
+      name: "哔哩哔哩"
+      expected_domain: "bilibili.com"   # 实际 host 为 search.bilibili.com
+                                        # 注：B站热搜几乎不含 vtuber，vtuber 内容本项目不覆盖
+
+    - id: "douban"                      # 豆瓣，影视/书评，配合「游戏与番剧」组
+      name: "豆瓣"
+      expected_domain: "douban.com"     # 实际 host 为 movie.douban.com
+
+    - id: "steam"                       # Steam，游戏发售/促销
+      name: "Steam"
+      expected_domain: "steampowered.com"   # 实际 host 为 store.steampowered.com
+
+    - id: "hupu"                        # 虎扑，体育+生活话题，热榜原味
+      name: "虎扑"
+      expected_domain: "hupu.com"       # 实际 host 为 bbs.hupu.com
+
+    - id: "chongbuluo"                  # 虫部落，极客/工具/资源分享，10 条但质量高
+      name: "虫部落"
+      expected_domain: "chongbuluo.com"
+
+    - id: "producthunt"                 # Product Hunt，英文新产品，配合 English Tech
+      name: "Product Hunt"
+      expected_domain: "producthunt.com"
+
+    # ── 有趣：求职与安全（技术向，但话题轻松）─────────────────
+
+    - id: "nowcoder"                    # 牛客，秋招/面经/offer，20 条全是真实求职吐槽
+      name: "牛客"
+      expected_domain: "nowcoder.com"
+
+    - id: "freebuf"                     # FreeBuf，安全圈，CVE/杀软/攻防，配合「安全与漏洞」组
+      name: "FreeBuf"
+      expected_domain: "freebuf.com"
+
+    # ── 政策与时政（只保留 2 个，避免时政淹没技术内容）──────────
+
+    - id: "thepaper"                    # 澎湃新闻，时政/社会，20 条
+      name: "澎湃新闻"
+      expected_domain: "thepaper.cn"    # 实际 host 为 www.thepaper.cn / m.thepaper.cn
+
+    - id: "ifeng"                       # 凤凰网，12 条，偏国际时政
+      name: "凤凰网"
+      expected_domain: "ifeng.com"      # 实际 host 为 news.ifeng.com / original.ifeng.com
+
 
 
 # ===============================================================
@@ -131,7 +211,7 @@ rss:
   freshness_filter:
     enabled: true                     # 是否启用新鲜度过滤（true=启用, false=关闭）
 
-    max_age_days: 3                   # 【改 1】原文为 1
+    max_age_days: 3                   # 【改 1】RSS 全局新鲜度窗口
                                       # - 正整数：只推送 N 天内的文章
                                       # - 0：禁用过滤，推送所有文章
                                       #
@@ -192,7 +272,22 @@ rss:
                                       #   1 天内 0 条 / 3 天内 1 条 / 7 天内 2 条 / 30 天内 15 条
                                       # 更新慢但单条信息密度高，放宽到 7 天
 
-    # ── 个人博客（沿用你的原设定：保持禁用）────────────────
+    # ── 政策与产业（撑起「政策与产业」组，只用 2 个源）──────
+    # 为什么只有 gov.cn 的 rss.xml：该站其他 4 个 RSS 路径均 404，
+    # 唯独 /pushinfo/v150203/rss.xml 可用（60 条，host 全是 www.gov.cn）
+    # 更新慢（3 天内仅 2 条），但每条都是国务院/中办原文，密度极高
+    - id: "gov"
+      name: "中国政府网"
+      url: "https://www.gov.cn/pushinfo/v150203/rss.xml"
+      max_age_days: 15                # 实测 72h 内仅 2 条，收紧会推空
+
+    # 中新网财经：产业政策落地/地方新政/指数发布，30 条全在 3 天内
+    # 只取 finance，不取 china/world/society —— 后三个会把时政灌满报告
+    - id: "cn-finance"
+      name: "中新网财经"
+      url: "https://www.chinanews.com.cn/rss/finance.xml"
+
+    # ── 个人博客（沿用原设定：保持禁用）────────────────
     - id: "ruanyifeng"
       name: "阮一峰的网络日志"
       url: "http://www.ruanyifeng.com/blog/atom.xml"
@@ -310,8 +405,8 @@ display:
   # 独立展示区：将指定平台/RSS 完整展示，不受关键词过滤
   # 推送展示由 regions.standalone 控制，AI 分析由 ai_analysis.include_standalone 控制
   standalone:
-    platforms: ["zhihu", "wallstreetcn-hot"]     # 热榜平台 ID 列表（如 ["zhihu", "weibo"]）
-    rss_feeds: []                                # RSS 源 ID 列表（如 ["hacker-news"]）
+    platforms: ["zhihu", "weibo"]                # 热榜平台 ID 列表（必须是上方 platforms.sources 里存在的 id）
+    rss_feeds: []                                # RSS 源 ID 列表（如 ["gov", "cn-finance"]）
     max_items: 20                                # 每个源最多展示条数（0=不限制）
 
 
